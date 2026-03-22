@@ -540,6 +540,28 @@ Thanks to all [38+ contributors](https://github.com/decolua/9router/graphs/contr
 
 ---
 
+## 💖 Support This Project
+
+If combo-cliproxy saved you time or money, consider supporting its development:
+
+<div align="center">
+
+<a href="https://github.com/sponsors/Codek365">
+  <img src="https://img.shields.io/badge/💖_GitHub_Sponsors-Codek365-ea4aaa?style=for-the-badge&logo=github-sponsors" alt="GitHub Sponsors" />
+</a>
+&nbsp;&nbsp;
+<a href="https://www.buymeacoffee.com/codek365">
+  <img src="https://img.shields.io/badge/☕_Buy_Me_a_Coffee-codek365-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" />
+</a>
+
+</div>
+
+Your support helps maintain the project, improve documentation, and add new features. Every contribution — no matter how small — is greatly appreciated! 🙏
+
+> 💡 Also consider starring ⭐ the [9Router repo](https://github.com/decolua/9router) — the core engine that powers everything.
+
+---
+
 ## 📄 License
 
 MIT License — see [LICENSE](LICENSE) for details.
@@ -552,6 +574,8 @@ This project uses [9Router](https://github.com/decolua/9router) which is also li
 
 **Made with ❤️ for the AI coding community**
 
-[9Router](https://github.com/decolua/9router) · [Report Bug](https://github.com/Codek365/combo-cliproxy/issues) · [Request Feature](https://github.com/Codek365/combo-cliproxy/issues)
+[9Router](https://github.com/decolua/9router) · [Sponsor](https://github.com/sponsors/Codek365) · [Buy Me a Coffee](https://www.buymeacoffee.com/codek365)
+
+[Report Bug](https://github.com/Codek365/combo-cliproxy/issues) · [Request Feature](https://github.com/Codek365/combo-cliproxy/issues)
 
 </div>
