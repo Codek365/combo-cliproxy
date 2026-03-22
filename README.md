@@ -84,6 +84,7 @@ This project provides a **fully automated bash script** to deploy [9Router](http
 - [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) (`gcloud` CLI)
 - [Git](https://git-scm.com/)
 - A GCP account with billing enabled
+- *(Optional)* [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) — for custom domain setup
 
 ### 1. Clone & Run
 
@@ -119,6 +120,248 @@ chmod +x deploy.sh
 ```
 
 That's it! Your 9Router instance will be live on Cloud Run in ~3 minutes. 🎉
+
+---
+
+## 🔐 Google Cloud (`gcloud`) Setup Guide
+
+If you haven't set up `gcloud` CLI yet, follow these steps:
+
+### Install `gcloud` CLI
+
+**macOS** (Homebrew):
+```bash
+brew install --cask google-cloud-sdk
+```
+
+**macOS** (Manual):
+```bash
+curl https://sdk.cloud.google.com | bash
+exec -l $SHELL   # Restart shell
+```
+
+**Linux** (Debian/Ubuntu):
+```bash
+sudo apt-get install apt-transport-https ca-certificates gnupg curl
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+sudo apt-get update && sudo apt-get install google-cloud-cli
+```
+
+**Windows** (PowerShell):
+```powershell
+(New-Object Net.WebClient).DownloadFile("https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe", "$env:Temp\GoogleCloudSDKInstaller.exe")
+& $env:Temp\GoogleCloudSDKInstaller.exe
+```
+
+### Login & Authenticate
+
+```bash
+# 1. Login to Google account (opens browser)
+gcloud auth login
+
+# 2. Set your project
+gcloud config set project YOUR_PROJECT_ID
+
+# 3. Verify login
+gcloud auth list
+#   ✓ your-email@gmail.com (ACTIVE)
+
+# 4. Configure Docker auth (needed for pushing images)
+gcloud auth configure-docker us-west1-docker.pkg.dev
+```
+
+### Multi-Account Management
+
+```bash
+# Add another Google account
+gcloud auth login --no-launch-browser  # For headless/SSH
+
+# List all accounts
+gcloud auth list
+
+# Switch between accounts
+gcloud config set account your-other-email@gmail.com
+
+# Set default project per account
+gcloud config set project MY_OTHER_PROJECT
+
+# Quick check: who am I?
+gcloud config get account
+gcloud config get project
+```
+
+### Common `gcloud` Commands
+
+```bash
+# List all projects you have access to
+gcloud projects list
+
+# Create a new project
+gcloud projects create my-new-project --name="My Project"
+
+# List billing accounts
+gcloud billing accounts list
+
+# Link billing to project
+gcloud billing projects link my-new-project --billing-account=XXXXXX-YYYYYY-ZZZZZZ
+
+# List Cloud Run services
+gcloud run services list --project=YOUR_PROJECT
+
+# View logs
+gcloud run services logs read combo-cliproxy --region=us-west1 --limit=50
+
+# Delete a service
+gcloud run services delete combo-cliproxy --region=us-west1
+```
+
+---
+
+## 🌐 Cloudflare Tunnel (`cloudflared`) Setup Guide
+
+Use Cloudflare Tunnel to map a **custom domain** (e.g. `combo.yourdomain.com`) to your Cloud Run service — with free SSL, DDoS protection, and no open ports needed.
+
+### Why use a Tunnel?
+
+| | Direct Cloud Run URL | Custom Domain (Tunnel) |
+|---|---|---|
+| **URL** | `combo-cliproxy-xxx.us-west1.run.app` | `combo.yourdomain.com` |
+| **Latency** | ~0.38s ✅ | ~0.93s |
+| **Memorable** | ❌ Long, auto-generated | ✅ Short, custom |
+| **SSL** | ✅ Auto (Google) | ✅ Auto (Cloudflare) |
+| **Use for** | AI tools (API calls) | Dashboard (browser) |
+
+> 💡 **Best practice**: Use Cloud Run URL for AI tools (fastest), Tunnel for dashboard access only.
+
+### Install `cloudflared`
+
+**macOS:**
+```bash
+brew install cloudflared
+```
+
+**Linux (Debian/Ubuntu):**
+```bash
+curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflared.list
+sudo apt-get update && sudo apt-get install cloudflared
+```
+
+**Linux (Generic):**
+```bash
+curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+chmod +x cloudflared
+sudo mv cloudflared /usr/local/bin/
+```
+
+**Windows:**
+```powershell
+winget install Cloudflare.cloudflared
+```
+
+### Step 1: Login to Cloudflare
+
+```bash
+cloudflared tunnel login
+# → Opens browser → Select your domain → Authorizes
+# → Saves cert.pem to ~/.cloudflared/
+```
+
+### Step 2: Create a Tunnel
+
+```bash
+# Create tunnel (pick a name)
+cloudflared tunnel create combo-tunnel
+
+# Note the Tunnel ID (e.g. abcd1234-5678-...)
+# Credentials saved to ~/.cloudflared/<TUNNEL_ID>.json
+```
+
+### Step 3: Configure the Tunnel
+
+Create `~/.cloudflared/config.yml`:
+
+```yaml
+tunnel: abcd1234-5678-xxxx-yyyy-zzzzzzzzzzzz  # Your Tunnel ID
+credentials-file: /home/user/.cloudflared/abcd1234-5678-xxxx-yyyy-zzzzzzzzzzzz.json
+
+ingress:
+  # Route custom domain to Cloud Run
+  - hostname: combo.yourdomain.com
+    service: https://combo-cliproxy-XXXXXXXXXX.us-west1.run.app
+    originRequest:
+      httpHostHeader: combo-cliproxy-XXXXXXXXXX.us-west1.run.app
+      noTLSVerify: false
+
+  # Catch-all (required)
+  - service: http_status:404
+```
+
+> ⚠️ **Important**: Replace the Cloud Run URL and hostname with your actual values.
+
+> 💡 **`httpHostHeader`** is critical — it tells Cloud Run which service to route to. Without it, you'll get 404 errors.
+
+### Step 4: Add DNS Record
+
+```bash
+# Create CNAME record pointing to your tunnel
+cloudflared tunnel route dns combo-tunnel combo.yourdomain.com
+# → Creates CNAME: combo.yourdomain.com → <TUNNEL_ID>.cfargotunnel.com
+```
+
+Or manually in Cloudflare Dashboard:
+- **Type:** CNAME
+- **Name:** `combo`
+- **Target:** `<TUNNEL_ID>.cfargotunnel.com`
+- **Proxy:** ☁️ Proxied
+
+### Step 5: Run the Tunnel
+
+```bash
+# Test run (foreground)
+cloudflared tunnel run combo-tunnel
+
+# Run as background service
+sudo cloudflared service install
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared  # Start on boot
+```
+
+### Step 6: Verify
+
+```bash
+# Check tunnel status
+cloudflared tunnel info combo-tunnel
+
+# Test your custom domain
+curl -I https://combo.yourdomain.com
+# Should return HTTP 200 or 302
+```
+
+### Performance Optimization (Cloudflare Dashboard)
+
+To minimize latency through the tunnel, disable these on your domain zone:
+
+1. **Speed → Optimization → Rocket Loader** → ❌ Off
+2. **Speed → Optimization → Auto Minify** → ❌ Uncheck all (JS, CSS, HTML)
+3. **Email → Email Routing → Email Obfuscation** → ❌ Off
+
+These features inject JavaScript that can break API responses and add latency.
+
+### Tunnel Architecture
+
+```
+┌──────────────┐        ┌───────────────┐        ┌─────────────────┐
+│   Browser    │───────→│  Cloudflare   │───────→│   Cloud Run     │
+│              │  HTTPS │   Edge/CDN    │ Tunnel │                 │
+│ combo.your   │        │   (global)    │        │ combo-cliproxy  │
+│ domain.com   │        │               │        │ :20128          │
+└──────────────┘        └───────────────┘        └─────────────────┘
+                         ↑
+                    Free SSL + DDoS
+                    + Caching + WAF
+```
 
 ---
 
@@ -256,9 +499,7 @@ Cloud Run with this configuration is essentially **free** for personal use:
 ```
 combo-cliproxy/
 ├── deploy.sh           # 🚀 Main deployment script (interactive menu)
-├── README.md           # 📖 This file
-└── docs/
-    └── handoff/        # 📝 Deployment notes & history
+└── README.md           # 📖 This file
 ```
 
 ---
